@@ -1,5 +1,7 @@
 # higgsfree
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Open-source video generation pipeline. Face identity preservation, voice cloning, lipsync, face restoration — modular and contributor-friendly.
 
 ## Pipelines
