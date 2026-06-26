@@ -1,0 +1,30 @@
+name: Wake EC2 for Jenkins
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
+
+jobs:
+  wake-ec2:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Start EC2 instance
+        env:
+          AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION:            us-east-1
+          INSTANCE_ID:           i-02460972dbc8e315e
+        run: |
+          pip install awscli -q
+          STATE=$(aws ec2 describe-instances --region $AWS_REGION \
+            --instance-ids $INSTANCE_ID \
+            --query "Reservations[0].Instances[0].State.Name" --output text)
+          echo "Instance state: $STATE"
+          if [ "$STATE" = "stopped" ]; then
+            aws ec2 start-instances --region $AWS_REGION --instance-ids $INSTANCE_ID
+            echo "Started EC2 — Jenkins will pick up the job shortly"
+          else
+            echo "Instance already $STATE"
+          fi
