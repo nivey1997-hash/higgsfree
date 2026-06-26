@@ -171,7 +171,7 @@ def _run_echomimic_impl(avatar_image_path: str, audio_path: str,
         f.write(_SCRIPT)
         script_path = f.name
 
-    from pipeline.gpu_env import gpu_env
+    from core.utils.gpu_env import gpu_env
     env = gpu_env()
     env["FFMPEG_PATH"] = "/usr/bin"
 

@@ -15,7 +15,11 @@ Open-source video generation pipeline. Face identity preservation, voice cloning
 ## Quick Start
 
 ```bash
-# Install dependencies
+# Provision the avatar_studio (Sonic) stack on a GPU box:
+#   venv-sonic + Sonic/PuLID/CodeFormer + venv-chatterbox + Kokoro
+bash deploy/install_sonic_stack.sh
+
+# (legacy EchoMimicV2 / F5-TTS stack)
 bash deploy/install_pipeline.sh
 
 # Run avatar_studio pipeline

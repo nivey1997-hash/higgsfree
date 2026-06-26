@@ -27,7 +27,7 @@ def run_hallo2(portrait_path: str, audio_path: str, output_path: str,
     Returns:
         output_path
     """
-    from pipeline.gpu_env import gpu_env
+    from core.utils.gpu_env import gpu_env
 
     with tempfile.TemporaryDirectory() as tmpdir:
         # Write per-job config pointing save_path to our tmpdir

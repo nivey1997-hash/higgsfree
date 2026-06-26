@@ -347,7 +347,7 @@ def enhance_composite_with_postprocessing(
     """
 
     # Import here to avoid circular dependency
-    from pipeline.face_composite import composite_face_onto_reference
+    from core.steps.face_composite import composite_face_onto_reference
 
     # Step 1: Composite face region
     composite_video = composite_face_onto_reference(

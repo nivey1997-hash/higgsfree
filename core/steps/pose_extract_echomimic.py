@@ -85,7 +85,7 @@ def extract_pose_for_echomimic(video_path: str, out_dir: str, max_frames: int = 
         f.write(_SCRIPT)
         script_path = f.name
 
-    from pipeline.gpu_env import gpu_env
+    from core.utils.gpu_env import gpu_env
     env = gpu_env()
 
     proc = subprocess.run(
