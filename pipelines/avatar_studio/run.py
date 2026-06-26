@@ -41,6 +41,7 @@ from core.steps.tts import synthesize
 from core.steps.sonic_lipsync import run_sonic
 from core.steps.codeformer_polish import polish_video
 from core.steps.face_composite import composite_face_onto_reference
+from core.steps.video_sr import upscale_video
 
 
 def step_done(path: str) -> bool:
@@ -48,7 +49,8 @@ def step_done(path: str) -> bool:
 
 
 def run(consent_video: str, output_path: str, workdir: str,
-        text: str, scene: str = "studio", aspect: str = "9:16"):
+        text: str, scene: str = "studio", aspect: str = "9:16",
+        upscale: int = 1):
 
     os.makedirs(workdir, exist_ok=True)
 
@@ -143,8 +145,7 @@ def run(consent_video: str, output_path: str, workdir: str,
     if not crop_for_sonic:
         if not step_done(composited):
             log.info("Step 8/9 — Composite animated face onto scene")
-            composite_face_onto_reference(polished, cropped_png, composited,
-                                          scene_image=avatar_png)
+            composite_face_onto_reference(polished, avatar_png, composited)
         else:
             log.info("Step 8/9 — skipped (cached)")
         video_before_mux = composited
@@ -160,14 +161,26 @@ def run(consent_video: str, output_path: str, workdir: str,
         capture_output=True, text=True,
     ).stdout.strip() or "0")
 
+    # When upscaling, mux to an intermediate file first so the SR pass is final.
+    mux_target = os.path.join(workdir, "muxed.mp4") if upscale > 1 else output_path
+
     subprocess.run([
         "ffmpeg", "-y",
         "-i", video_before_mux, "-i", audio_out,
         "-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-movflags", "+faststart",
         "-t", f"{audio_dur:.3f}", "-shortest",
-        output_path,
+        mux_target,
     ], check=True, capture_output=True)
+
+    # ── Optional: Real-ESRGAN super-resolution upscale ────────────────────────
+    if upscale > 1:
+        log.info(f"Upscale — Real-ESRGAN {upscale}x")
+        try:
+            upscale_video(mux_target, output_path, upscale=upscale)
+        except Exception as e:
+            log.warning(f"Upscale failed (non-fatal), using muxed output: {e}")
+            shutil.copy(mux_target, output_path)
 
     log.info(f"Done: {output_path}")
 
@@ -180,6 +193,8 @@ if __name__ == "__main__":
     parser.add_argument("--text", required=True)
     parser.add_argument("--scene", default="studio", choices=list(SCENE_PRESETS.keys()))
     parser.add_argument("--aspect", default="9:16", choices=list(ASPECT_SIZES.keys()))
+    parser.add_argument("--upscale", type=int, default=1, choices=[1, 2],
+                        help="Real-ESRGAN super-resolution factor (1 = off, 2 = 2x for ~4K output)")
     args = parser.parse_args()
     run(args.consent_video, args.output, args.workdir,
-        text=args.text, scene=args.scene, aspect=args.aspect)
+        text=args.text, scene=args.scene, aspect=args.aspect, upscale=args.upscale)

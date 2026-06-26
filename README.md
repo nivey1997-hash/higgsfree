@@ -10,6 +10,7 @@ Open-source video generation pipeline. Face identity preservation, voice cloning
 |----------|-------------|------|
 | `avatar_studio` | Seated studio portrait, full scene compositing | 20GB |
 | `portrait` | Head-only talking head, minimal setup | 16GB |
+| `text_to_video` | CogVideoX-5b text→video (or image+prompt→video) | 24GB |
 
 ## Quick Start
 
@@ -22,6 +23,16 @@ python pipelines/avatar_studio/run.py \
     consent_video.mp4 output.mp4 \
     --text "Hey! This is my talking avatar." \
     --scene studio --aspect 9:16
+
+# Add --upscale 2 for Real-ESRGAN 2x super-resolution (~4K output)
+python pipelines/avatar_studio/run.py \
+    consent_video.mp4 output.mp4 \
+    --text "Hey!" --scene studio --aspect 9:16 --upscale 2
+
+# Text-to-video (no avatar needed)
+python pipelines/text_to_video/run.py output.mp4 \
+    --text "A golden retriever running on a beach at sunset, cinematic, 4k" \
+    --aspect 16:9
 ```
 
 ## Project Structure
@@ -73,3 +84,6 @@ higgsfree/
 | `video_postproc` | FFmpeg post-processing filters |
 | `lipsync` | LatentSync alternative lipsync |
 | `hallo2` | Hallo2 audio-driven talking head |
+| `soul_id` | Persistent face-identity embedding per avatar (identity-locked frame selection + QA) |
+| `text_to_video` | CogVideoX-5b text→video / image→video generation |
+| `video_sr` | Real-ESRGAN 2x super-resolution upscale |

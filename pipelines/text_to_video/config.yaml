@@ -1,0 +1,40 @@
+# Text-to-Video Pipeline
+# CogVideoX-5b (THUDM, Apache 2.0) — prompt → video clip (or image + prompt → video)
+
+name: text_to_video
+version: "1.0"
+description: >
+  Generates a short video clip from a text prompt using CogVideoX-5b, with an
+  optional image-to-video mode (animate a still with a prompt). Open-source
+  equivalent of Higgsfield's text-to-video generators. No avatar/identity step —
+  this is a standalone generative pipeline. Optional Real-ESRGAN upscale.
+
+steps:
+  - id: generate
+    module: core.steps.text_to_video
+    fn: generate_video_from_text
+    description: CogVideoX-5b text-to-video diffusion
+    params:
+      num_frames: 49      # 49 ≈ 6s at 8fps (must be 8k+1)
+      steps: 50
+      guidance: 6.0
+      fps: 8
+
+  - id: generate_i2v
+    module: core.steps.text_to_video
+    fn: generate_video_from_image
+    description: CogVideoX-5b-I2V — animate a still image with a prompt (used when --image given)
+    optional: true
+
+  - id: upscale
+    module: core.steps.video_sr
+    fn: upscale_video
+    description: Optional Real-ESRGAN super-resolution (2x → ~4K). Off unless --upscale 2.
+    optional: true
+    params:
+      upscale: 2
+
+environment:
+  venv: /home/ubuntu/venv-cogvideo
+  gpu: required
+  vram_gb: 24
