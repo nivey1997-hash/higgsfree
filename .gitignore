@@ -1,0 +1,26 @@
+# secrets
+.env
+.env.*
+*.pem
+*.key
+worker.env
+*secret*
+*credentials*
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# temp / output
+*.mp4
+*.mov
+*.MOV
+*.wav
+*.tmp.*
+*.log
+
+# OS
+.DS_Store
