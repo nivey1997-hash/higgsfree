@@ -80,6 +80,20 @@ pipeline {
             }
         }
 
+        stage('Worker import smoke test') {
+            // Gate: the backend worker must import cleanly (catches refactor drift
+            // between core/steps and the worker's pipeline.* compat shim) BEFORE
+            // any code can be merged or deployed.
+            steps {
+                sh '''
+                    cd worker
+                    PYTHONPATH="${WORKSPACE}" \
+                    SQS_QUEUE_URL=dummy S3_BUCKET=dummy DATABASE_URL=postgresql://dummy AWS_REGION=us-east-1 \
+                    /home/ubuntu/venv-sonic/bin/python -c "import worker; print('worker import OK')"
+                '''
+            }
+        }
+
         stage('Get baseline score') {
             steps {
                 script {
@@ -194,6 +208,30 @@ _Tested on the L40S CI box · Build #${env.BUILD_NUMBER}_"""
             steps {
                 sh "echo ${env.SCORE} > /home/ubuntu/ci_test/baseline_score.txt"
                 echo "Baseline updated to ${env.SCORE}"
+            }
+        }
+
+        stage('Deploy to backend worker') {
+            // CD: only on main (post-merge) builds, and only after the pipeline
+            // ran + scored successfully above. Syncs this exact commit into the
+            // worker's runtime dir and bounces the service.
+            when {
+                expression { !params.PR_NUMBER?.trim() }
+            }
+            steps {
+                sh '''
+                    DEST=/home/ubuntu/worker_app
+                    mkdir -p "$DEST"
+                    rsync -a --delete \
+                      --exclude='.git/' --exclude='ci/' --exclude='.github/' \
+                      --exclude='assets/' --exclude='docs/' --exclude='__pycache__/' \
+                      "${WORKSPACE}/" "$DEST/"
+                    # try-restart only bounces the worker if it is CURRENTLY running.
+                    # The worker auto-stops the EC2 box when idle, so we must never
+                    # start it here on an otherwise-idle CI box.
+                    sudo systemctl try-restart avatar-worker.service
+                    echo "Deployed $(git -C "${WORKSPACE}" rev-parse --short HEAD) to $DEST (try-restart issued)"
+                '''
             }
         }
     }
