@@ -39,6 +39,7 @@ Every PR is run automatically on a real GPU and scored for quality before merge.
 |----------|-------------|------|
 | `avatar_studio` | Seated studio portrait with full scene compositing | 20 GB |
 | `portrait` | Head-only talking head, minimal setup, faster previews | 16 GB |
+| `text_to_video` | CogVideoX-5b text→video (or image+prompt→video) | 24 GB |
 
 ---
 
@@ -47,7 +48,11 @@ Every PR is run automatically on a real GPU and scored for quality before merge.
 **Requirements:** NVIDIA GPU with 16–20 GB VRAM (tested on g5.2xlarge / A10G 24 GB), CUDA 12.1, FFmpeg, Python 3.10+.
 
 ```bash
-# Install dependencies
+# Provision the avatar_studio (Sonic) stack on a GPU box:
+#   venv-sonic + Sonic/PuLID/CodeFormer + venv-chatterbox + Kokoro
+bash deploy/install_sonic_stack.sh
+
+# (legacy EchoMimicV2 / F5-TTS stack)
 bash deploy/install_pipeline.sh
 
 # Run the avatar_studio pipeline
@@ -55,6 +60,16 @@ python pipelines/avatar_studio/run.py \
     consent_video.mp4 output.mp4 \
     --text "Hey! This is my talking avatar." \
     --scene studio --aspect 9:16
+
+# Add --upscale 2 for Real-ESRGAN 2x super-resolution (~4K output)
+python pipelines/avatar_studio/run.py \
+    consent_video.mp4 output.mp4 \
+    --text "Hey!" --scene studio --aspect 9:16 --upscale 2
+
+# Text-to-video (no avatar needed)
+python pipelines/text_to_video/run.py output.mp4 \
+    --text "A golden retriever running on a beach at sunset, cinematic, 4k" \
+    --aspect 16:9
 ```
 
 **CLI options**
@@ -116,9 +131,9 @@ higgsfree/
 ├── eval/
 │   └── score_pipeline.py   # Quality scoring: face similarity + lipsync confidence
 ├── ci/
-│   ├── Jenkinsfile         # GPU pipeline — runs and scores PRs
-│   └── workflows/          # GitHub Actions — wakes EC2 on approved PRs
-├── deploy/                 # Dockerfile, install_pipeline.sh, requirements.txt
+│   └── Jenkinsfile         # GPU pipeline — runs and scores PRs
+├── .github/workflows/      # GitHub Actions — wakes EC2 on approved PRs
+├── deploy/                 # Dockerfile, install_*.sh, requirements.txt
 └── docs/
     └── adding_a_pipeline.md
 ```
@@ -142,6 +157,9 @@ higgsfree/
 | `codeformer_polish` | Per-frame face restoration |
 | `face_composite` | Feathered face compositing onto scene background |
 | `replicate_fallback` | Cloud lipsync fallback when no local GPU is available |
+| `soul_id` | Persistent face-identity embedding per avatar (identity-locked frame selection + QA) |
+| `text_to_video` | CogVideoX-5b text→video / image→video generation |
+| `video_sr` | Real-ESRGAN 2x super-resolution upscale |
 
 ---
 
@@ -203,7 +221,7 @@ Contributions are welcome — new pipelines, new core steps, and quality improve
 
 ## CI / CD
 
-- **GitHub Actions** (`ci/workflows/wake-ec2.yml`) wakes the GPU EC2 instance when a maintainer adds the `approved-for-ci` label to a PR.
+- **GitHub Actions** (`.github/workflows/wake-ec2.yml`) wakes the GPU EC2 instance when a maintainer adds the `approved-for-ci` label to a PR.
 - **Jenkins** (`ci/Jenkinsfile`) checks out the branch, runs the full pipeline on a test video, scores the output, and posts a comparison comment against the `main` baseline.
 - Merges to `main` update the baseline score.
 

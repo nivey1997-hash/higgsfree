@@ -48,6 +48,23 @@ pip install insightface onnxruntime-gpu
 echo "===== 8. Misc deps ====="
 pip install soundfile torchaudio moviepy omegaconf diffusers accelerate einops av
 
+echo "===== 9. CogVideoX text-to-video (isolated venv) ====="
+# CogVideoX needs a recent diffusers; keep it isolated from the avatar venv.
+VENV_COGVIDEO=/home/ubuntu/venv-cogvideo
+if [ ! -d "$VENV_COGVIDEO" ]; then
+  python3.10 -m venv "$VENV_COGVIDEO"
+fi
+"$VENV_COGVIDEO/bin/pip" install --upgrade pip wheel
+"$VENV_COGVIDEO/bin/pip" install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+# diffusers>=0.30 ships the CogVideoX pipelines; imageio-ffmpeg for export_to_video
+"$VENV_COGVIDEO/bin/pip" install "diffusers>=0.30.0" transformers accelerate sentencepiece imageio imageio-ffmpeg
+# Pre-download weights (T2V + I2V) so first generation isn't a cold fetch
+"$VENV_COGVIDEO/bin/python" -c "
+from huggingface_hub import snapshot_download
+for repo in ['THUDM/CogVideoX-5b', 'THUDM/CogVideoX-5b-I2V']:
+    snapshot_download(repo_id=repo)
+" || echo "WARN: CogVideoX weight pre-download skipped (will fetch on first run)"
+
 echo ""
 echo "===== DONE ====="
 echo "Test with:"

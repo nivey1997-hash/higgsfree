@@ -15,6 +15,27 @@ PULID_DIR         = os.environ.get("PULID_DIR",         "/home/ubuntu/PuLID")
 PULID_VENV_PYTHON = os.environ.get("PULID_VENV_PYTHON", "/home/ubuntu/venv-sonic/bin/python")
 REALVIS_MODEL_ID  = os.environ.get("REALVIS_MODEL",     "SG161222/RealVisXL_V4.0")
 
+# Avatar-generation canvas sizes (width, height) per output aspect ratio.
+ASPECT_SIZES = {
+    "9:16": (768, 1344),
+    "1:1":  (1024, 1024),
+    "16:9": (1344, 768),
+    "4:5":  (864, 1080),
+    "4:3":  (1024, 768),
+}
+
+# Scene presets. ``crop_for_sonic=True`` means the generated avatar is already a
+# head+shoulders crop fed straight to Sonic (portrait mode, no compositing).
+# ``False`` means a fuller framing — the runner crops it for Sonic and then
+# composites the animated face back onto this image (studio/scene modes).
+SCENE_PRESETS = {
+    "portrait": {"crop_for_sonic": True,  "description": "Head-only talking head, fed straight to Sonic"},
+    "studio":   {"crop_for_sonic": False, "description": "Studio portrait, crop for Sonic then composite back"},
+    "cafe":     {"crop_for_sonic": False, "description": "Cafe scene background"},
+    "outdoor":  {"crop_for_sonic": False, "description": "Outdoor scene background"},
+    "desk":     {"crop_for_sonic": False, "description": "Desk / office scene background"},
+}
+
 _app = None
 
 
@@ -196,14 +217,23 @@ def _mouth_open_ratio(face, frame_h: int) -> float:
     return 0.0
 
 
-def extract_best_face_frame(video_path: str, output_jpg: str) -> str:
+def extract_best_face_frame(video_path: str, output_jpg: str, soul_embedding=None) -> str:
     """Extract the best frontal, mouth-closed, sharp face frame from a consent video.
 
     Scoring:
     - Requires yaw ≤ ±25° and pitch ≤ ±20° (frontal only)
     - Penalises open mouth (landmark ratio > 0.08)
     - Weighted: det_score 40% + face_area 30% + sharpness 20% + frontality 10%
+
+    If ``soul_embedding`` is provided (a locked Soul ID identity vector), the
+    frame is instead chosen to best match that identity — see
+    ``core.steps.soul_id.select_best_face_frame``.
     """
+    if soul_embedding is not None:
+        from core.steps.soul_id import select_best_face_frame
+        log.info("Soul ID provided — selecting identity-locked best frame")
+        return select_best_face_frame(video_path, output_jpg, soul_embedding)
+
     app, _ = _load_models()
 
     cap = cv2.VideoCapture(video_path)
@@ -441,15 +471,19 @@ def generate_avatar_image(face_path: str, outfit_id: str, scene_id: str,
 
 
 def generate_avatar_from_video(video_path: str, outfit_id: str, scene_id: str,
-                               face_output: str, avatar_output: str) -> tuple:
+                               face_output: str, avatar_output: str,
+                               soul_embedding=None) -> tuple:
     """Full onboarding flow: consent video → face → PuLID → img2img → crop → avatar.png.
+
+    If ``soul_embedding`` is provided, the source frame is chosen to match the
+    avatar's locked Soul ID identity (see ``core.steps.soul_id``).
 
     Returns (face_jpg_path, avatar_png_path)
     """
     out_dir = os.path.dirname(os.path.abspath(face_output))
 
-    # Step 1: extract best face frame
-    extract_best_face_frame(video_path, face_output)
+    # Step 1: extract best face frame (identity-locked if a Soul ID is supplied)
+    extract_best_face_frame(video_path, face_output, soul_embedding=soul_embedding)
 
     # Step 2: PuLID portrait (4-step SDXL-Lightning, id_scale=0.8)
     portrait_tmp = os.path.join(out_dir, "_pulid.png")
@@ -468,3 +502,48 @@ def generate_avatar_from_video(video_path: str, outfit_id: str, scene_id: str,
     crop_head_shoulders(source, avatar_output)
 
     return face_output, avatar_output
+
+
+def generate_scene_avatar(face_path: str, output_path: str,
+                          scene_name: str = "studio", aspect: str = "9:16",
+                          soul_embedding=None) -> str:
+    """Generate a scene/aspect-aware avatar image from a face frame.
+
+    Flow: PuLID portrait → RealVisXL img2img refine → (head+shoulders crop for
+    portrait scenes) → resize to the aspect's canvas size.
+
+    For ``portrait`` (``crop_for_sonic=True``) the result is a head+shoulders
+    crop fed straight to Sonic. For studio/scene presets the fuller framing is
+    kept so the runner can crop for Sonic and composite the animated face back.
+    """
+    preset = SCENE_PRESETS.get(scene_name, SCENE_PRESETS["studio"])
+    tw, th = ASPECT_SIZES.get(aspect, ASPECT_SIZES["9:16"])
+    out_dir = os.path.dirname(os.path.abspath(output_path))
+
+    portrait_tmp = os.path.join(out_dir, "_scene_pulid.png")
+    refined_tmp  = os.path.join(out_dir, "_scene_refined.png")
+    cropped_tmp  = os.path.join(out_dir, "_scene_cropped.png")
+
+    generate_pulid_portrait(face_path, portrait_tmp)
+
+    try:
+        refine_portrait_img2img(portrait_tmp, refined_tmp)
+        source = refined_tmp
+    except Exception as e:
+        log.warning(f"img2img refinement failed (using raw PuLID): {e}")
+        source = portrait_tmp
+
+    if preset["crop_for_sonic"]:
+        try:
+            crop_head_shoulders(source, cropped_tmp)
+            source = cropped_tmp
+        except Exception as e:
+            log.warning(f"Head+shoulders crop failed (using full portrait): {e}")
+
+    from PIL import Image
+    img = Image.open(source).convert("RGB").resize((tw, th), Image.LANCZOS)
+    img.save(output_path)
+
+    log.info(f"Scene avatar generated (scene={scene_name}, aspect={aspect}, "
+             f"{tw}x{th}): {output_path}")
+    return output_path

@@ -11,4 +11,6 @@ from core.steps.animate import *
 from core.steps.video_postproc import *
 from core.steps.video_sr import *
 from core.steps.replicate_fallback import *
+from core.steps.soul_id import *
+from core.steps.text_to_video import *
 from core.utils.gpu_env import *

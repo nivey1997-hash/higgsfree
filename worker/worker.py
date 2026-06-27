@@ -19,6 +19,8 @@ from pipeline.avatar_gen import generate_avatar_image, generate_avatar_from_vide
 from pipeline.voiceclone import extract_voice_profile, synthesize_with_cloned_voice
 from pipeline.sonic_lipsync import run_sonic
 from pipeline.codeformer_polish import polish_video
+from pipeline.video_sr import upscale_video
+from pipeline.soul_id import build_soul_id, load_soul_id
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -117,6 +119,20 @@ def _download_voice_profile(avatar: dict, avatar_id: str, tmpdir: str) -> str | 
         return profile_dir
     except Exception as e:
         log.warning(f"Could not load cached voice profile: {e}")
+        return None
+
+
+def _download_soul_id(avatar_id: str, tmpdir: str):
+    """Return the avatar's locked Soul ID embedding if cached in S3, else None."""
+    soul_key = f"avatars/{avatar_id}/soul_id.npy"
+    local_path = os.path.join(tmpdir, "soul_id.npy")
+    try:
+        download_s3(soul_key, local_path)
+        emb = load_soul_id(local_path)
+        if emb is not None:
+            log.info(f"Reusing Soul ID: {soul_key}")
+        return emb
+    except Exception:
         return None
 
 
@@ -219,6 +235,10 @@ def process_job(payload: dict):
         consent_video_key = avatar.get("consentVideoKey")
         cached_portrait_key = avatar.get("cachedFrameKey")
 
+        # Locked Soul ID identity (if onboarding cached one) — used to pick the
+        # most on-identity consent frame for PuLID.
+        soul_embedding = _download_soul_id(avatar_id, tmpdir)
+
         if HAS_GPU:
             if consent_video_key:
                 consent_ext = ".webm" if consent_video_key.endswith(".webm") else ".mp4"
@@ -238,6 +258,7 @@ def process_job(payload: dict):
                         generate_avatar_from_video(
                             consent_video_local, outfit_id, scene_id,
                             face_jpg, avatar_image_path,
+                            soul_embedding=soul_embedding,
                         )
                         portrait_key = f"avatars/{avatar_id}/portrait.png"
                         upload_s3(avatar_image_path, portrait_key, content_type="image/png")
@@ -349,6 +370,17 @@ def process_job(payload: dict):
             output_path,
         ], check=True, capture_output=True)
 
+        # ── Optional: Real-ESRGAN super-resolution upscale (e.g. 2x → ~4K) ────
+        upscale = int(payload.get("upscale", 1))
+        if HAS_GPU and upscale > 1:
+            update_status(video_id, "PROCESSING_UPSCALE")
+            upscaled_path = os.path.join(tmpdir, f"output_{video_id}_x{upscale}.mp4")
+            try:
+                upscale_video(output_path, upscaled_path, upscale=upscale)
+                output_path = upscaled_path
+            except Exception as e:
+                log.warning(f"Upscale failed (non-fatal), using base output: {e}")
+
         out_key = f"videos/{video_id}/output.mp4"
         cloudfront_url = upload_s3(output_path, out_key)
 
@@ -405,6 +437,20 @@ def process_consent_video(payload: dict):
         face_jpg = os.path.join(tmpdir, "face.jpg")
         portrait_png = os.path.join(tmpdir, "portrait.png")
 
+        # ── Soul ID: lock the avatar's face identity once, upfront ───────────
+        # Averaged InsightFace embedding from the consent video → cached in S3.
+        # Reused on every future generation to pick on-identity frames.
+        soul_embedding = None
+        try:
+            soul_local = os.path.join(tmpdir, "soul_id.npy")
+            if build_soul_id(consent_video_local, soul_local):
+                soul_embedding = load_soul_id(soul_local)
+                upload_s3(soul_local, f"avatars/{avatar_id}/soul_id.npy",
+                          content_type="application/octet-stream")
+                log.info(f"Soul ID locked for avatar {avatar_id}")
+        except Exception as e:
+            log.warning(f"Soul ID build failed (non-fatal): {e}")
+
         if HAS_GPU:
             try:
                 # If user uploaded a face photo, use it directly (better quality than video frame)
@@ -436,7 +482,8 @@ def process_consent_video(payload: dict):
                     # Full onboarding: frame pick → PuLID → img2img → crop → avatar.png
                     generate_avatar_from_video(
                         consent_video_local, outfit_id, scene_id,
-                        face_jpg, portrait_png
+                        face_jpg, portrait_png,
+                        soul_embedding=soul_embedding,
                     )
             except Exception as e:
                 log.error(f"Avatar generation failed: {e}")

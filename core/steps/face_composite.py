@@ -24,7 +24,7 @@ log = logging.getLogger(__name__)
 def _load_face_detector():
     import insightface
     from insightface.app import FaceAnalysis
-    from pipeline.gpu_env import gpu_env
+    from core.utils.gpu_env import gpu_env
     env = gpu_env()
     # Ensure LD_LIBRARY_PATH is set in this process
     os.environ["LD_LIBRARY_PATH"] = env["LD_LIBRARY_PATH"]

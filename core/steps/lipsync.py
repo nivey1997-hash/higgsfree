@@ -17,7 +17,7 @@ VENV_PYTHON = os.environ.get("LATENTSYNC_VENV_PYTHON", "/home/ubuntu/venv-latent
 
 def run_lipsync_on_video(video_path: str, audio_path: str, output_path: str) -> str:
     """Apply LatentSync lip sync to a video."""
-    from pipeline.gpu_env import gpu_env
+    from core.utils.gpu_env import gpu_env
     env = gpu_env()
     existing_pp = env.get("PYTHONPATH", "")
     env["PYTHONPATH"] = LATENTSYNC_DIR + (":" + existing_pp if existing_pp else "")
