@@ -99,6 +99,17 @@ wget -q -O "$KOKORO_DIR/kokoro-v0_19.onnx" \
 wget -q -O "$KOKORO_DIR/voices.bin" \
     https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files/voices.bin
 
+echo "===== 7b. Seed the CI test sample (Jenkins expects this exact path) ====="
+# The Jenkinsfile uses /home/ubuntu/ci_test/sample.MOV as BOTH the pipeline
+# input and the identity ground-truth for scoring. It is box-local (gitignored),
+# so seed it from S3. Override CI_SAMPLE_S3 to use a different clip.
+CI_SAMPLE_S3="${CI_SAMPLE_S3:-s3://avatar-graperoot-assets/consent-videos/test-manual/IMG_5498.MOV}"
+mkdir -p /home/ubuntu/ci_test
+if [ ! -f /home/ubuntu/ci_test/sample.MOV ]; then
+  aws s3 cp "$CI_SAMPLE_S3" /home/ubuntu/ci_test/sample.MOV \
+    || echo "WARN: could not fetch CI sample from $CI_SAMPLE_S3 — place /home/ubuntu/ci_test/sample.MOV manually"
+fi
+
 echo "===== 8. venv-chatterbox (voice cloning, isolated) ====="
 python3.10 -m venv "$VENV_CHATTERBOX"
 "$VENV_CHATTERBOX/bin/pip" install --upgrade pip wheel

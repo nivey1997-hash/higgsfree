@@ -8,8 +8,12 @@ pipeline {
 
     environment {
         GITHUB_TOKEN = credentials('github-token')
-        TEST_VIDEO   = '/home/ubuntu/ci_test/sample.MOV'
+        // Single source of truth for the CI test clip. Fetched from S3 each run
+        // (see "Fetch test sample" stage) so CI never depends on a manually
+        // placed file. Override here to swap the reference clip.
+        SAMPLE_S3    = 's3://avatar-graperoot-assets/consent-videos/test-manual/IMG_5498.MOV'
         WORK_DIR     = "/home/ubuntu/ci_test/run_${env.BUILD_NUMBER}"
+        TEST_VIDEO   = "/home/ubuntu/ci_test/run_${env.BUILD_NUMBER}/sample.MOV"
         OUTPUT_VIDEO = "/home/ubuntu/ci_test/run_${env.BUILD_NUMBER}/output.mp4"
         TEST_TEXT    = 'Hey! This is a quick test of the video generation pipeline.'
     }
@@ -52,6 +56,16 @@ pipeline {
                     ).trim()
                     echo "Baseline score: ${env.BASELINE}"
                 }
+            }
+        }
+
+        stage('Fetch test sample') {
+            steps {
+                sh """
+                    mkdir -p ${env.WORK_DIR}
+                    aws s3 cp ${env.SAMPLE_S3} ${env.TEST_VIDEO}
+                    test -f ${env.TEST_VIDEO}
+                """
             }
         }
 
