@@ -14,7 +14,7 @@ jobs:
           AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION:            us-east-1
-          INSTANCE_ID:           i-02460972dbc8e315e
+          INSTANCE_ID:           i-0a7c6c7bb9dee006b
         run: |
           pip install awscli -q
           STATE=$(aws ec2 describe-instances --region $AWS_REGION \
@@ -34,7 +34,7 @@ jobs:
         run: |
           echo "Waiting for Jenkins on port 8080..."
           for i in $(seq 1 24); do
-            if curl -s --max-time 5 http://34.196.144.73:8080/login | grep -q "Jenkins"; then
+            if curl -s --max-time 5 http://44.197.172.237:8080/login | grep -q "Jenkins"; then
               echo "Jenkins is up"
               break
             fi
@@ -50,5 +50,5 @@ jobs:
           # Trigger a branch scan on the Multibranch Pipeline job
           curl -s -X POST \
             --user "$JENKINS_USER:$JENKINS_TOKEN" \
-            "http://34.196.144.73:8080/job/higgsfree/build" \
+            "http://44.197.172.237:8080/job/higgsfree/build" \
             -w "\nHTTP status: %{http_code}\n"
