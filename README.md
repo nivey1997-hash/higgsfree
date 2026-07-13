@@ -16,6 +16,8 @@ face identity preserved, voice cloned, lips synced to generated speech.
 
 [Quick Start](#quick-start) · [How It Works](#how-it-works) · [Architecture](#architecture) · [Contributing](#contributing)
 
+[![Open free text-to-video notebook in Google Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/nivey1997-hash/higgsfree/blob/main/notebooks/higgsfree_free_colab.ipynb)
+
 </div>
 
 ---
@@ -44,6 +46,20 @@ Every PR is run automatically on a real GPU and scored for quality before merge.
 ---
 
 ## Quick Start
+
+### Browser quick start (free Colab GPU)
+
+The easiest way to try text-to-video without owning an NVIDIA GPU is the
+[HiggsFree Free Colab notebook](notebooks/higgsfree_free_colab.ipynb). Open it,
+choose **Runtime → Change runtime type → T4 GPU**, and run the cells from top to
+bottom. It uses the lighter CogVideoX-2B model with aggressive CPU offloading
+and produces a downloadable MP4.
+
+Google does not guarantee free GPU availability or runtime length. The first
+run also downloads roughly 14 GB of model files and can take a while. This
+notebook is text-to-video only; the avatar/voice-cloning pipeline still needs a
+larger dedicated NVIDIA GPU. Only clone a real person's face or voice with
+their clear consent.
 
 **Requirements:** NVIDIA GPU with 16–20 GB VRAM (tested on g5.2xlarge / A10G 24 GB), CUDA 12.1, FFmpeg, Python 3.10+.
 
